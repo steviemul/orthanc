@@ -3,20 +3,19 @@ package main
 import (
 	"fmt"
 	"orthanc-observer/event"
+	"time"
 )
 
 func main() {
 
 	fmt.Println("orthanc-observer starting")
 
-	var event = event.Event{
-		EventType: "loaded",
-		PID:       1234,
-	}
+	var process = event.Process
 
-	event.Update()
-
-	eventJson, _ := event.Json()
-
-	fmt.Printf("Processing event %s", eventJson)
+	process(
+		event.DummyObserver{},
+		event.SystemOutEventHandler{},
+		10,
+		time.Second,
+	)
 }
