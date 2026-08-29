@@ -1,0 +1,17 @@
+services:
+  # The application you want to monitor
+  test-app:
+    build:
+      context: .
+      dockerfile: app.Dockerfile
+    stdin_open: true
+    tty: true
+    
+  # Your Go process monitoring sidecar
+  orthanc-observer:
+    build:
+      context: ../observer
+      dockerfile: ../docker/observer.Dockerfile
+    pid: "service:test-app"
+    depends_on:
+      - test-app

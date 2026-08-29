@@ -10,12 +10,9 @@ func main() {
 
 	fmt.Println("orthanc-observer starting")
 
-	var process = event.Process
+	pollingProcessViewer := event.NewPollingProcessViewer(2*time.Second, event.SystemOutEventHandler{})
 
-	process(
-		event.DummyObserver{},
-		event.SystemOutEventHandler{},
-		10,
-		time.Second,
-	)
+	fmt.Println("orthanc-observer started. Ctrl+C to stop")
+
+	pollingProcessViewer.Start()
 }
