@@ -65,8 +65,22 @@ func BuildEvent(eventType string, pid int, path string) Event {
 	}
 }
 
+func ProcessPids(eventType string, left map[int]string, right map[int]string, handler EventHandler) {
+
+	for pid, path := range left {
+		if _, exists := right[pid]; !exists {
+
+			event := BuildEvent(eventType, pid, path)
+
+			handler.HandleEvent(event)
+		}
+	}
+}
+
 func (p *PollingProcessViewer) Start() {
 	p.active = p.Snapshot()
+
+	ProcessPids("SNAPSHOT", p.active, make(map[int]string), p.handler)
 
 	ticker := time.NewTicker(p.interval)
 
@@ -75,22 +89,8 @@ func (p *PollingProcessViewer) Start() {
 	for range ticker.C {
 		current := p.Snapshot()
 
-		for pid, path := range current {
-			if _, exists := p.active[pid]; !exists {
-
-				event := BuildEvent("started", pid, path)
-
-				p.handler.HandleEvent(event)
-			}
-		}
-
-		for pid, path := range p.active {
-			if _, exists := current[pid]; !exists {
-				event := BuildEvent("stopped", pid, path)
-
-				p.handler.HandleEvent(event)
-			}
-		}
+		ProcessPids("STARTED", current, p.active, p.handler)
+		ProcessPids("STOPPED", p.active, current, p.handler)
 
 		p.active = current
 	}
