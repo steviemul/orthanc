@@ -1,6 +1,7 @@
 services:
   # The application you want to monitor
   test-app:
+    container_name: observer-test-app
     build:
       context: .
       dockerfile: app.Dockerfile
