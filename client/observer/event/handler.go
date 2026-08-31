@@ -3,9 +3,9 @@ package event
 import (
 	"fmt"
 	"os"
-)
 
-const LOG_FILE = "/var/log/observer.log"
+	"github.com/steviemul/orthanc-observer/config"
+)
 
 type EventHandler interface {
 	HandleEvent(e Event)
@@ -30,7 +30,7 @@ type FileOutEventHandler struct{}
 func (fh FileOutEventHandler) HandleEvent(e Event) {
 	e.Update()
 
-	logFile, err := os.OpenFile(LOG_FILE, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	logFile, err := os.OpenFile(config.LOG_FILE, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 	if err == nil {
 		eventJson, _ := e.Json()

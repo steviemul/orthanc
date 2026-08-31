@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"orthanc-observer/event"
 	"time"
+
+	"github.com/steviemul/orthanc-observer/event"
 )
 
 func main() {
