@@ -18,6 +18,8 @@ type PollingProcessViewer struct {
 	handler  EventHandler
 }
 
+var _ ProcessViewer = (*PollingProcessViewer)(nil)
+
 func NewPollingProcessViewer(interval time.Duration, handler EventHandler) *PollingProcessViewer {
 	return &PollingProcessViewer{
 		interval: interval,

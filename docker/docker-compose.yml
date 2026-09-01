@@ -16,5 +16,10 @@ services:
       context: ../client/observer
       dockerfile: ../../docker/observer.Dockerfile
     pid: "service:observer-test-app"
+    # Needed to load BPF programs and attach tracepoints (kernel 5.8+).
+    # On older kernels, replace with `privileged: true`.
+    cap_add:
+      - BPF
+      - PERFMON
     depends_on:
       - observer-test-app

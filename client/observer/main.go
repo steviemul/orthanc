@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/steviemul/orthanc-observer/config"
 	"github.com/steviemul/orthanc-observer/event"
 	"github.com/steviemul/orthanc-observer/plugin"
 )
@@ -27,12 +28,17 @@ func main() {
 		}
 	}()
 
-	pollingProcessViewer := event.NewPollingProcessViewer(
-		time.Second,
-		event.NewChannelEventHandler(eventCh),
-	)
+	channelHandler := event.NewChannelEventHandler(eventCh)
+
+	var processViewer event.ProcessViewer
+
+	if config.UseEBPF() {
+		processViewer = event.NewEBPFProcessViewer(channelHandler)
+	} else {
+		processViewer = event.NewPollingProcessViewer(time.Second, channelHandler)
+	}
 
 	fmt.Println("orthanc-observer started. Ctrl+C to stop")
 
-	pollingProcessViewer.Start()
+	processViewer.Start()
 }
