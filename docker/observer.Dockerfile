@@ -2,12 +2,26 @@
 FROM golang:1.27 AS builder
 
 # clang compiles the eBPF C source (bpf/monitor.c) to bytecode; libbpf-dev
-# provides <bpf/bpf_helpers.h>. No bpftool/vmlinux.h needed - the program
-# only uses plain BPF helpers, no CO-RE reads of kernel structs.
+# provides <bpf/bpf_helpers.h>; llvm provides llvm-strip, which bpf2go
+# shells out to after compiling in order to strip the object. No
+# bpftool/vmlinux.h needed - the program only uses plain BPF helpers, no
+# CO-RE reads of kernel structs.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     clang \
+    llvm \
     libbpf-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# clang -target bpf doesn't get gcc's usual per-arch multiarch include dir
+# (e.g. /usr/include/aarch64-linux-gnu) added to its search path, so
+# <linux/bpf.h>'s #include <asm/types.h> can't resolve. Symlink the
+# native arch's asm headers to the generic /usr/include/asm gcc normally
+# provides via update-alternatives.
+RUN case "$(dpkg --print-architecture)" in \
+      amd64) triplet=x86_64-linux-gnu ;; \
+      arm64) triplet=aarch64-linux-gnu ;; \
+      *) echo "unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
+    esac && ln -s "/usr/include/${triplet}/asm" /usr/include/asm
 
 WORKDIR /app
 

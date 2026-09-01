@@ -12,4 +12,4 @@
 // module build on any platform, including without running `go generate`.
 package bpf
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type process_event Bpf monitor.c
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type process_event Bpf monitor.c -- -O2 -g -Wall

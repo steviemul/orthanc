@@ -21,5 +21,10 @@ services:
     cap_add:
       - BPF
       - PERFMON
+    # Tracepoint attachment reads the tracefs/debugfs event format files.
+    # Docker gives containers a fresh sysfs mount, so the host's debugfs
+    # submount isn't visible inside without this bind mount.
+    volumes:
+      - /sys/kernel/debug:/sys/kernel/debug:rw
     depends_on:
       - observer-test-app

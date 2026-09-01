@@ -24,6 +24,16 @@ const (
 	ebpfEventStopped uint32 = 1
 )
 
+// int8sToBytes converts the generated bindings' [16]int8 comm field (C's
+// char is signed on the target platform) into a []byte for string handling.
+func int8sToBytes(s []int8) []byte {
+	b := make([]byte, len(s))
+	for i, v := range s {
+		b[i] = byte(v)
+	}
+	return b
+}
+
 // EBPFProcessViewer watches process start/stop via kernel tracepoints
 // (sched_process_exec / sched_process_exit) instead of polling /proc.
 type EBPFProcessViewer struct {
@@ -84,7 +94,7 @@ func (p *EBPFProcessViewer) Start() {
 			continue
 		}
 
-		comm := string(bytes.TrimRight(raw.Comm[:], "\x00"))
+		comm := string(bytes.TrimRight(int8sToBytes(raw.Comm[:]), "\x00"))
 
 		eventType := "STARTED"
 		if raw.Type == ebpfEventStopped {

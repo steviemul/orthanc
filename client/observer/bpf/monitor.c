@@ -16,6 +16,12 @@ struct process_event {
     char comm[16];
 };
 
+// process_event is only ever used as a local variable (in submit_event
+// below), and the BTF the compiler emits only tracks types reachable from
+// a global symbol. Without this, bpf2go's `-type process_event` can't find
+// it. The variable itself is never read.
+struct process_event *unused_process_event __attribute__((unused));
+
 // Define the Ring Buffer map
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
