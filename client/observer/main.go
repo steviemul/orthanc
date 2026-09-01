@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/steviemul/orthanc-observer/event"
+	"github.com/steviemul/orthanc-observer/plugin"
 )
 
 func main() {
@@ -20,6 +21,8 @@ func main() {
 
 	go func() {
 		for e := range eventCh {
+			e.Evidence = plugin.RunPipeline(e)
+
 			compositeEventHandler.HandleEvent(e)
 		}
 	}()

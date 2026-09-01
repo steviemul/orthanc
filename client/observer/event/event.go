@@ -5,12 +5,17 @@ import (
 	"time"
 )
 
+type Evidence struct {
+	Facts map[string]string `json:"facts"`
+}
+
 type Event struct {
-	Timestamp time.Time `json:"timestamp"`
-	EventType string    `json:"event_type"`
-	PID       int       `json:"pid"`
-	Process   string    `json:"process"`
-	Path      string    `json:"path"`
+	Timestamp time.Time  `json:"timestamp"`
+	EventType string     `json:"event_type"`
+	PID       int        `json:"pid"`
+	Process   string     `json:"process"`
+	Path      string     `json:"path"`
+	Evidence  []Evidence `json:"evidence"`
 }
 
 func (e *Event) Update() {
