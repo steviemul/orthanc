@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := build-observer
 
 OBSERVER_DIR := client/observer
-DOCKER_DIR := client/docker
+DOCKER_DIR := docker
 
 .PHONY: build-observer docker-up docker-down clean help
 
