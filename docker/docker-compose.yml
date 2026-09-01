@@ -1,21 +1,12 @@
 services:
-  # The application you want to monitor
-  observer-test-app:
-    container_name: observer-test-app
-    build:
-      context: .
-      dockerfile: app.Dockerfile
-    ports:
-      - 8081:80
-    stdin_open: true
-    tty: true
-    
-  # Your Go process monitoring sidecar
+  # Your Go process monitoring sidecar.
+  # This is the PID namespace anchor: observer-test-app and event-collector
+  # both join it below so orthanc-observer can see processes from either.
+  # (In production you'd scope one observer per target instead.)
   orthanc-observer:
     build:
       context: ../client/observer
       dockerfile: ../../docker/observer.Dockerfile
-    pid: "service:observer-test-app"
     # Needed to load BPF programs and attach tracepoints (kernel 5.8+).
     # On older kernels, replace with `privileged: true`.
     cap_add:
@@ -26,8 +17,20 @@ services:
     # submount isn't visible inside without this bind mount.
     volumes:
       - /sys/kernel/debug:/sys/kernel/debug:rw
+
+  # The application you want to monitor
+  observer-test-app:
+    container_name: observer-test-app
+    build:
+      context: .
+      dockerfile: app.Dockerfile
+    ports:
+      - 8081:80
+    stdin_open: true
+    tty: true
+    pid: "service:orthanc-observer"
     depends_on:
-      - observer-test-app
+      - orthanc-observer
 
   # Server side event collector
   event-collector:
@@ -37,3 +40,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - 8082:8080
+    pid: "service:orthanc-observer"
+    depends_on:
+      - orthanc-observer
