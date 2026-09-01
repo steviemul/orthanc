@@ -28,8 +28,33 @@ struct {
     __uint(max_entries, 1 << 16); // 64KB buffer size
 } events SEC(".maps");
 
+// dev/ino of the PID namespace events should be reported in, i.e. the one
+// our own userspace side reads /proc against (see
+// event.EBPFProcessViewer.Start in process_ebpf.go, which stats
+// /proc/self/ns/pid and sets these on the CollectionSpec before load).
+//
+// bpf_get_current_pid_tgid() returns the pid/tgid as recorded on
+// task_struct, which is always the pid as seen from the outermost (root)
+// PID namespace of the machine - not the namespace the traced process, or
+// we ourselves, actually live in. Resolving through
+// bpf_get_ns_current_pid_tgid() against our own namespace instead gives
+// back the same numbering our own /proc uses, whether that happens to be
+// the host's root namespace (running standalone) or a namespace shared
+// with other containers (running under docker-compose).
+volatile __u64 target_ns_dev = 0;
+volatile __u64 target_ns_ino = 0;
+
 static __always_inline int submit_event(__u32 type) {
     struct process_event *e;
+    struct bpf_pidns_info nsdata;
+
+    // Resolve into our own namespace rather than trusting the raw,
+    // root-namespace pid/tgid. If the traced process isn't visible from
+    // our namespace (or target_ns_dev/ino haven't been configured yet),
+    // there's nothing useful to report - drop the event.
+    if (bpf_get_ns_current_pid_tgid(target_ns_dev, target_ns_ino, &nsdata, sizeof(nsdata))) {
+        return 0;
+    }
 
     // Reserve space in the ring buffer
     e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
@@ -38,7 +63,7 @@ static __always_inline int submit_event(__u32 type) {
     }
 
     // Populate data using helper functions
-    e->pid = bpf_get_current_pid_tgid() >> 32; // Extract the user-space PID
+    e->pid = nsdata.tgid;
     e->type = type;
     bpf_get_current_comm(&e->comm, sizeof(e->comm)); // Extract executable name
 

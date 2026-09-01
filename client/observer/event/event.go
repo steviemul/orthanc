@@ -15,6 +15,7 @@ type Event struct {
 	PID       int        `json:"pid"`
 	Process   string     `json:"process"`
 	Path      string     `json:"path"`
+	Source    string     `json:"source"`
 	Evidence  []Evidence `json:"evidence"`
 }
 

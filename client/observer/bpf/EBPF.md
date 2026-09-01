@@ -73,18 +73,34 @@ struct {
 
 A BPF *map* is the general mechanism eBPF programs use to share state — with userspace, or with each other. `BPF_MAP_TYPE_RINGBUF` is a map type specifically designed for streaming a sequence of variable-length records from kernel to userspace efficiently: it's a single 64KB circular buffer, and the kernel-side reserve/submit helpers plus the userspace reader coordinate over it without needing a syscall per event (userspace is notified via an epoll-compatible fd and reads directly from a shared mmap'd region).
 
+### Which PID namespace?
+
+```c
+volatile __u64 target_ns_dev = 0;
+volatile __u64 target_ns_ino = 0;
+```
+
+`bpf_get_current_pid_tgid()` (used below) returns the pid/tgid straight off `task_struct`, which is always the pid as seen from the *outermost (root) PID namespace of the machine* — not the namespace the traced process, or the observer itself, actually lives in. That's a problem the moment userspace is going to turn around and look the pid up under its own `/proc` (see [java.go](../plugin/java.go)/[busybox.go](../plugin/busybox.go)'s `readCmdLineArgs`): under Docker, `orthanc-observer` runs in its own private PID namespace (shared with whichever other containers join it via `pid: "service:orthanc-observer"` in [docker-compose.yml](../../../docker/docker-compose.yml)), not the host's root namespace, so a raw root-namespace pid won't resolve to anything under the container's `/proc`.
+
+These two globals hold the dev/inode of the PID namespace we want pids resolved into instead — our own, identified by `/proc/self/ns/pid`. They're plain (non-`const`) globals, so they live in the `.bss` section and stay writable; [process_ebpf.go](../event/process_ebpf.go) stats its own `/proc/self/ns/pid` and sets them on the `ebpf.CollectionSpec` *before* the program is loaded (`Variable.Set` on an already-loaded object has no effect — see `configureTargetPidNamespace`). Using our own namespace as the target works whether that namespace happens to be the machine's actual root (running standalone, no containers involved) or one shared with other containers (the docker-compose setup here): either way it's the same namespace `/proc` inside this process already reflects.
+
 ### Submitting an event
 
 ```c
 static __always_inline int submit_event(__u32 type) {
     struct process_event *e;
+    struct bpf_pidns_info nsdata;
+
+    if (bpf_get_ns_current_pid_tgid(target_ns_dev, target_ns_ino, &nsdata, sizeof(nsdata))) {
+        return 0;
+    }
 
     e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e) {
         return 0;
     }
 
-    e->pid = bpf_get_current_pid_tgid() >> 32;
+    e->pid = nsdata.tgid;
     e->type = type;
     bpf_get_current_comm(&e->comm, sizeof(e->comm));
 
@@ -95,7 +111,7 @@ static __always_inline int submit_event(__u32 type) {
 
 Shared by both tracepoint handlers below. The reserve/populate/submit pattern is standard for ring buffers: `bpf_ringbuf_reserve` claims `sizeof(struct process_event)` bytes directly inside the buffer (it can fail and return `NULL` if the buffer is full — the check is mandatory, the verifier will reject the program without it), the fields are filled in in place, and `bpf_ringbuf_submit` marks the record ready for userspace to read. Writing straight into buffer-owned memory like this avoids an extra copy.
 
-`bpf_get_current_pid_tgid()` returns a 64-bit value packing two IDs for the calling task: the low 32 bits are the *thread* ID (`tid`), the high 32 bits are the *thread-group* ID (`tgid`) — which is what userspace calls the PID (the ID of the process as a whole, shared by all its threads). Shifting right by 32 extracts the tgid, i.e. the PID a user would recognize.
+`bpf_get_ns_current_pid_tgid(dev, ino, &nsdata, sizeof(nsdata))` (kernel 5.16+) resolves the current task's pid/tgid as seen from the PID namespace identified by `dev`/`ino`, writing them into `nsdata.pid`/`nsdata.tgid` and returning 0 on success. It fails (non-zero) if that namespace isn't the caller's own namespace or one of its ancestors — which also doubles as a convenient way to bail out before reserving ring buffer space if `target_ns_dev`/`target_ns_ino` haven't been configured yet (both still zero) — in which case there's nothing worth submitting anyway. `nsdata.tgid` (as opposed to `.pid`, which is the thread ID) is what userspace calls the PID: the ID of the process as a whole, shared by all its threads.
 
 `bpf_get_current_comm` copies the current task's short name (`comm`, as seen in `/proc/<pid>/comm`, capped at 16 bytes) into the event.
 
@@ -162,16 +178,45 @@ func (p *EBPFProcessViewer) Start() {
 		log.Fatalf("failed to remove memlock limit: %v", err)
 	}
 
+	spec, err := bpf.LoadBpf()
+	if err != nil {
+		log.Fatalf("loading bpf spec failed: %v", err)
+	}
+
+	if err := configureTargetPidNamespace(spec); err != nil {
+		log.Fatalf("failed to configure target pid namespace: %v", err)
+	}
+
 	objs := bpf.BpfObjects{}
-	if err := bpf.LoadBpfObjects(&objs, nil); err != nil {
+	if err := spec.LoadAndAssign(&objs, nil); err != nil {
 		log.Fatalf("loading bpf objects failed: %v", err)
 	}
 	defer objs.Close()
 ```
 
 - `rlimit.RemoveMemlock()` lifts the process's `RLIMIT_MEMLOCK` (locked-memory) limit. Older kernels charge the memory backing BPF maps and programs against this limit, which defaults low enough that loading a BPF program can fail with a confusing `EPERM`/`ENOMEM`; this is the standard workaround used by essentially every `cilium/ebpf` program. (On kernels with `CONFIG_BPF_JIT` cgroup memory accounting, this is largely a no-op, but it's harmless to always call.)
-- `bpf.LoadBpfObjects` (generated by `bpf2go`) loads the embedded compiled bytecode into the kernel — this is the point where the kernel's verifier checks the program (bounds checks, no unbounded loops, valid map accesses, etc.) and rejects it if it isn't provably safe. On success, `objs` holds live kernel handles: `objs.HandleExec` / `objs.HandleExit` (the loaded programs) and `objs.Events` (the ring buffer map).
+- `bpf.LoadBpf` (generated by `bpf2go`) parses the embedded compiled bytecode into an `*ebpf.CollectionSpec` — a blueprint for the maps/programs/variables, not yet loaded into the kernel.
+- `configureTargetPidNamespace` (below) sets the `target_ns_dev`/`target_ns_ino` globals from [monitor.c](monitor.c) on that spec, via `spec.Variables["target_ns_dev"].Set(...)`. This has to happen on the spec, before loading — `Variable.Set` on an already-loaded object is a no-op as far as the running program is concerned.
+- `spec.LoadAndAssign(&objs, nil)` is what `bpf.LoadBpfObjects` normally does under the hood (see [gen.go and bpf2go](#gengo-and-bpf2go)); calling it directly, on our already-configured spec, is the only difference from the generated convenience wrapper. This is the point where the kernel's verifier checks the program (bounds checks, no unbounded loops, valid map accesses, etc.) and rejects it if it isn't provably safe. On success, `objs` holds live kernel handles: `objs.HandleExec` / `objs.HandleExit` (the loaded programs) and `objs.Events` (the ring buffer map).
 - `objs.Close()` releases those kernel resources when `Start()` returns.
+
+```go
+func configureTargetPidNamespace(spec *ebpf.CollectionSpec) error {
+	var stat syscall.Stat_t
+
+	if err := syscall.Stat("/proc/self/ns/pid", &stat); err != nil {
+		return fmt.Errorf("stat /proc/self/ns/pid: %w", err)
+	}
+
+	if err := setBpfVariable(spec, "target_ns_dev", uint64(stat.Dev)); err != nil {
+		return err
+	}
+
+	return setBpfVariable(spec, "target_ns_ino", uint64(stat.Ino))
+}
+```
+
+`stat("/proc/self/ns/pid")` is the standard way to identify a PID namespace from userspace: every process's PID-namespace membership shows up as a magic symlink at that path (`pid:[4026531836]`-style), and the namespace's device/inode pair (`stat.Dev`/`stat.Ino`) uniquely identifies it, matching exactly what `bpf_get_ns_current_pid_tgid` expects as its `dev`/`ino` arguments in [monitor.c](monitor.c). `setBpfVariable` (a small helper alongside this function) looks the named variable up in `spec.Variables` by the same name it has in the C source and calls `.Set` on it, returning a clear error instead of a nil-pointer panic if the name is ever wrong.
 
 ```go
 	execTp, err := link.Tracepoint("sched", "sched_process_exec", objs.HandleExec, nil)
@@ -232,12 +277,12 @@ Each `rd.Read()` blocks until `submit_event` in the C program submits a record, 
 
 ## End-to-end event lifecycle
 
-1. Some process execs, or a thread-group leader exits, inside the container `orthanc-observer` shares a PID namespace with.
+1. Some process execs, or a thread-group leader exits, anywhere the machine's kernel can see — not necessarily inside the container `orthanc-observer` shares a PID namespace with; tracepoints fire kernel-wide, regardless of which PID namespace the exec'ing/exiting task happens to be in.
 2. The kernel invokes `handle_exec`/`handle_exit` in `monitor.c` at the corresponding tracepoint.
-3. `submit_event` reserves space in the `events` ring buffer, fills in `pid`, `type`, and `comm`, and submits it.
+3. `submit_event` resolves the pid into `orthanc-observer`'s own PID namespace via `bpf_get_ns_current_pid_tgid` (see [Which PID namespace?](#which-pid-namespace)) — dropping the event if that fails, e.g. because the process isn't visible from our namespace — then reserves space in the `events` ring buffer, fills in `pid`, `type`, and `comm`, and submits it.
 4. The kernel wakes up the blocked `rd.Read()` in `process_ebpf.go`.
-5. The raw bytes are decoded into a `BpfProcessEvent`, converted into an `event.Event` via `BuildEvent`, and handed to `p.handler.HandleEvent(...)`.
-6. From there it flows through the same path as a polled event: onto the shared channel in `main.go`, through `plugin.RunPipeline` for enrichment, and out through `CompositeEventHandler` to stdout and the log file.
+5. The raw bytes are decoded into a `BpfProcessEvent`, converted into an `event.Event` via `BuildEvent`, and handed to `p.handler.HandleEvent(...)`. Because step 3 already resolved `pid` into our own namespace, it's directly usable against our own `/proc` from here on.
+6. From there it flows through the same path as a polled event: onto the shared channel in `main.go`, through `plugin.RunPipeline` for enrichment (e.g. [java.go](../plugin/java.go) reading `/proc/<pid>/cmdline`), and out through `CompositeEventHandler` to stdout and the log file.
 
 ## Building and regenerating
 
@@ -252,7 +297,7 @@ make build-ebpf       # generate + go build -tags ebpf
 
 The Docker build ([../../docker/observer.Dockerfile](../../docker/observer.Dockerfile)) does exactly this inside the build stage, so `docker compose up` (`make docker-up` from the repo root) doesn't require any of this tooling on the host machine — only Docker itself.
 
-At runtime, loading BPF programs and attaching tracepoints needs `CAP_BPF` and `CAP_PERFMON` (kernel 5.8+), granted to the container via `cap_add` in [../../docker/docker-compose.yml](../../docker/docker-compose.yml) (or `privileged: true` on older kernels). The compose file also bind-mounts the host's `/sys/kernel/debug`, since tracepoint attachment reads the tracefs/debugfs event format files, which aren't visible in a container's default fresh sysfs mount otherwise.
+At runtime, loading BPF programs and attaching tracepoints needs `CAP_BPF` and `CAP_PERFMON` (kernel 5.8+), granted to the container via `cap_add` in [../../docker/docker-compose.yml](../../docker/docker-compose.yml) (or `privileged: true` on older kernels). The compose file also bind-mounts the host's `/sys/kernel/debug`, since tracepoint attachment reads the tracefs/debugfs event format files, which aren't visible in a container's default fresh sysfs mount otherwise. Separately, resolving pids into our own namespace (see [Which PID namespace?](#which-pid-namespace)) uses `bpf_get_ns_current_pid_tgid`, which needs kernel 5.16+ — a stricter floor than the 5.8 above. `uname -r` inside the container (or on the host, if running standalone) will confirm which you've got; Docker Desktop's Linux VM and most current distros are well past 5.16.
 
 ## Suggested next steps for learning
 

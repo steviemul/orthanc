@@ -57,9 +57,10 @@ func (p *PollingProcessViewer) Snapshot() map[int]string {
 
 }
 
-func BuildEvent(eventType string, pid int, path string) Event {
+func BuildEvent(eventType string, source string, pid int, path string) Event {
 
 	return Event{
+		Source:    source,
 		EventType: eventType,
 		PID:       pid,
 		Process:   path,
@@ -72,7 +73,7 @@ func ProcessPids(eventType string, left map[int]string, right map[int]string, ha
 	for pid, path := range left {
 		if _, exists := right[pid]; !exists {
 
-			event := BuildEvent(eventType, pid, path)
+			event := BuildEvent("/proc", eventType, pid, path)
 
 			handler.HandleEvent(event)
 		}

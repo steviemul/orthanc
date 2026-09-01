@@ -6,6 +6,7 @@ import (
 
 var plugins = []Plugin{
 	BusyboxPlugin{},
+	JavaPlugin{},
 }
 
 func RunPipeline(e event.Event) []event.Evidence {

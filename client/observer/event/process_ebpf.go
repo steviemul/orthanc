@@ -10,8 +10,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
+	"syscall"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
@@ -53,8 +56,17 @@ func (p *EBPFProcessViewer) Start() {
 		log.Fatalf("failed to remove memlock limit: %v", err)
 	}
 
+	spec, err := bpf.LoadBpf()
+	if err != nil {
+		log.Fatalf("loading bpf spec failed: %v", err)
+	}
+
+	if err := configureTargetPidNamespace(spec); err != nil {
+		log.Fatalf("failed to configure target pid namespace: %v", err)
+	}
+
 	objs := bpf.BpfObjects{}
-	if err := bpf.LoadBpfObjects(&objs, nil); err != nil {
+	if err := spec.LoadAndAssign(&objs, nil); err != nil {
 		log.Fatalf("loading bpf objects failed: %v", err)
 	}
 	defer objs.Close()
@@ -101,6 +113,40 @@ func (p *EBPFProcessViewer) Start() {
 			eventType = "STOPPED"
 		}
 
-		p.handler.HandleEvent(BuildEvent(eventType, int(raw.Pid), comm))
+		p.handler.HandleEvent(BuildEvent("EBPF", eventType, int(raw.Pid), comm))
 	}
+}
+
+// configureTargetPidNamespace tells monitor.c which PID namespace to
+// resolve traced processes' pids into: our own, identified by the dev/inode
+// of /proc/self/ns/pid. Without this, the pid on each event would be the
+// one bpf_get_current_pid_tgid() returns by default - the pid as seen from
+// the outermost (root) PID namespace of the machine - which won't match
+// anything under our own /proc, so plugins that shell out to
+// /proc/<pid>/cmdline (see plugin.readCmdLineArgs) find nothing.
+//
+// This must be set on the CollectionSpec before it's loaded: Variable.Set
+// on an already-loaded object has no effect on the running program.
+func configureTargetPidNamespace(spec *ebpf.CollectionSpec) error {
+	var stat syscall.Stat_t
+
+	if err := syscall.Stat("/proc/self/ns/pid", &stat); err != nil {
+		return fmt.Errorf("stat /proc/self/ns/pid: %w", err)
+	}
+
+	if err := setBpfVariable(spec, "target_ns_dev", uint64(stat.Dev)); err != nil {
+		return err
+	}
+
+	return setBpfVariable(spec, "target_ns_ino", uint64(stat.Ino))
+}
+
+func setBpfVariable(spec *ebpf.CollectionSpec, name string, value uint64) error {
+	v, ok := spec.Variables[name]
+
+	if !ok {
+		return fmt.Errorf("bpf variable %q not found in spec", name)
+	}
+
+	return v.Set(value)
 }
