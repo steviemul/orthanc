@@ -28,3 +28,12 @@ services:
       - /sys/kernel/debug:/sys/kernel/debug:rw
     depends_on:
       - observer-test-app
+
+  # Server side event collector
+  event-collector:
+    container_name: event-collector
+    build:
+      context: ../server/event-collector
+      dockerfile: Dockerfile
+    ports:
+      - 8082:8080
