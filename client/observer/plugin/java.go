@@ -24,9 +24,27 @@ func (bp JavaPlugin) ProcessEvent(e event.Event) *event.Evidence {
 		"args": strings.Join(args, " "),
 	}
 
+	jarPath := getJarPath(args)
+
+	if jarPath != "" {
+		facts["jarPath"] = jarPath
+	}
+
 	ev := &event.Evidence{
 		Facts: facts,
 	}
 
 	return ev
+}
+
+func getJarPath(javaArgs []string) string {
+
+	for i, arg := range javaArgs {
+
+		if "-jar" == arg {
+			return javaArgs[i+1]
+		}
+	}
+
+	return ""
 }

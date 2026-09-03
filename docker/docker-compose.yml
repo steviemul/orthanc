@@ -7,6 +7,9 @@ services:
     build:
       context: ../client/observer
       dockerfile: ../../docker/observer.Dockerfile
+    environment:
+      - EVENT_COLLECTOR_HOST=http://event-collector:8080
+      
     # Needed to load BPF programs and attach tracepoints (kernel 5.8+).
     # On older kernels, replace with `privileged: true`.
     cap_add:

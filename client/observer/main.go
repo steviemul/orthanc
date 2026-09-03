@@ -18,6 +18,7 @@ func main() {
 	compositeEventHandler := event.NewCompositeEventHandler(
 		event.SystemOutEventHandler{},
 		event.FileOutEventHandler{},
+		event.NewRestHandler(config.GetEventCollectorHost()),
 	)
 
 	go func() {
