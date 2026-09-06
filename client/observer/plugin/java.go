@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/steviemul/orthanc-observer/event"
+	"github.com/steviemul/orthanc-observer/io"
 )
 
 type JavaPlugin struct{}
@@ -27,7 +28,8 @@ func (bp JavaPlugin) ProcessEvent(e event.Event) *event.Evidence {
 	jarPath := getJarPath(args)
 
 	if jarPath != "" {
-		facts["jarPath"] = jarPath
+		facts["jarPath"] = io.GetFilePath(e, jarPath)
+		facts["rawJarLocation"] = io.GetEventFile(e, jarPath)
 	}
 
 	ev := &event.Evidence{

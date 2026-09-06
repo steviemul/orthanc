@@ -11,12 +11,13 @@ type Evidence struct {
 
 type Event struct {
 	Timestamp time.Time  `json:"timestamp"`
-	EventType string     `json:"event_type"`
+	EventType string     `json:"eventType"`
 	PID       int        `json:"pid"`
 	Process   string     `json:"process"`
 	Path      string     `json:"path"`
 	Source    string     `json:"source"`
 	Evidence  []Evidence `json:"evidence"`
+	Cwd       string     `json:"cwd"`
 }
 
 func (e *Event) Update() {

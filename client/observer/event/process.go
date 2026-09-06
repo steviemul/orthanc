@@ -59,12 +59,15 @@ func (p *PollingProcessViewer) Snapshot() map[int]string {
 
 func BuildEvent(eventType string, source string, pid int, path string) Event {
 
+	cwd, _ := os.Readlink(fmt.Sprintf("/proc/%d/cwd", pid))
+
 	return Event{
 		Source:    source,
 		EventType: eventType,
 		PID:       pid,
 		Process:   path,
 		Path:      path,
+		Cwd:       cwd,
 	}
 }
 

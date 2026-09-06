@@ -8,8 +8,8 @@ services:
       context: ../client/observer
       dockerfile: ../../docker/observer.Dockerfile
     environment:
-      - EVENT_COLLECTOR_HOST=http://event-collector:8080
-      
+      - EVENT_COLLECTOR_HOST=http://host.docker.internal:8080
+
     # Needed to load BPF programs and attach tracepoints (kernel 5.8+).
     # On older kernels, replace with `privileged: true`.
     cap_add:
@@ -39,8 +39,8 @@ services:
   event-collector:
     container_name: event-collector
     build:
-      context: ../server/event-collector
-      dockerfile: Dockerfile
+      context: ../server
+      dockerfile: event-collector/Dockerfile
     ports:
       - 8082:8080
     pid: "service:orthanc-observer"
