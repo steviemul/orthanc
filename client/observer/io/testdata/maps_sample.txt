@@ -1,0 +1,30 @@
+aaaac26a0000-aaaac26a1000 r-xp 00000000 00:42 707942                     /opt/java/openjdk/bin/java
+aaaac26bf000-aaaac26c0000 r--p 0000f000 00:42 707942                     /opt/java/openjdk/bin/java
+aaaac26c0000-aaaac26c1000 rw-p 00010000 00:42 707942                     /opt/java/openjdk/bin/java
+aaaaf5ecc000-aaaaf6000000 rw-p 00000000 00:00 0                          [heap]
+ffff88ef0000-ffff88ef1000 r-xp 00000000 00:42 698748                     /usr/lib/aarch64-linux-gnu/libpthread.so.0
+ffff88ef1000-ffff88f0f000 ---p 00001000 00:42 698748                     /usr/lib/aarch64-linux-gnu/libpthread.so.0
+ffff88f0f000-ffff88f10000 r--p 0000f000 00:42 698748                     /usr/lib/aarch64-linux-gnu/libpthread.so.0
+ffff88f10000-ffff88f11000 rw-p 00010000 00:42 698748                     /usr/lib/aarch64-linux-gnu/libpthread.so.0
+ffff88f20000-ffff88f21000 r-xp 00000000 00:42 698699                     /usr/lib/aarch64-linux-gnu/libdl.so.2
+ffff88f21000-ffff88f3f000 ---p 00001000 00:42 698699                     /usr/lib/aarch64-linux-gnu/libdl.so.2
+ffff88f3f000-ffff88f40000 r--p 0000f000 00:42 698699                     /usr/lib/aarch64-linux-gnu/libdl.so.2
+ffff88f40000-ffff88f41000 rw-p 00010000 00:42 698699                     /usr/lib/aarch64-linux-gnu/libdl.so.2
+ffff88f50000-ffff890f9000 r-xp 00000000 00:42 698687                     /usr/lib/aarch64-linux-gnu/libc.so.6
+ffff890f9000-ffff8910d000 ---p 001a9000 00:42 698687                     /usr/lib/aarch64-linux-gnu/libc.so.6
+ffff8910d000-ffff89110000 r--p 001ad000 00:42 698687                     /usr/lib/aarch64-linux-gnu/libc.so.6
+ffff89110000-ffff89112000 rw-p 001b0000 00:42 698687                     /usr/lib/aarch64-linux-gnu/libc.so.6
+ffff89112000-ffff8911e000 rw-p 00000000 00:00 0
+ffff89120000-ffff89139000 r-xp 00000000 00:42 708573                     /opt/java/openjdk/lib/libjli.so
+ffff89139000-ffff8914f000 ---p 00019000 00:42 708573                     /opt/java/openjdk/lib/libjli.so
+ffff8914f000-ffff89150000 r--p 0001f000 00:42 708573                     /opt/java/openjdk/lib/libjli.so
+ffff89150000-ffff89151000 rw-p 00020000 00:42 708573                     /opt/java/openjdk/lib/libjli.so
+ffff89160000-ffff8918a000 r-xp 00000000 00:42 698667                     /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+ffff89194000-ffff89196000 rw-p 00000000 00:00 0
+ffff89198000-ffff8919a000 rw-p 00000000 00:00 0
+ffff8919a000-ffff8919c000 r--p 00000000 00:00 0                          [vvar]
+ffff8919c000-ffff8919e000 r-xp 00000000 00:00 0                          [vdso]
+ffff8919e000-ffff891a0000 r--p 0002e000 00:42 698667                     /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+ffff891a0000-ffff891a1000 rw-p 00030000 00:42 698667                     /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+ffff891a1000-ffff891a2000 rw-p 00000000 00:00 0
+ffffc18b6000-ffffc18d7000 rw-p 00000000 00:00 0                          [stack]
